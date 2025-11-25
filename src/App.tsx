@@ -134,20 +134,43 @@ export default function App() {
       // Get stream URL from backend
       const streamData = await musicApi.getStreamUrl(track.videoId);
 
-      if (!streamData || !streamData.streamUrl) {
-        console.error('No stream URL available');
+      if (!streamData) {
+        console.error('No stream data available');
         alert('No se pudo cargar esta canción. Intenta con otra.');
         return;
       }
 
       // Set audio source and play
       if (audioRef.current) {
-        audioRef.current.src = streamData.streamUrl;
-        await audioRef.current.play();
-        setIsPlaying(true);
-
-        // Save to history
-        storage.saveToHistory(track);
+        // Use streamUrl if available, otherwise fall back to embedUrl
+        if (streamData.streamUrl) {
+          console.log(`🎵 Using stream URL (${streamData.method})`);
+          audioRef.current.src = streamData.streamUrl;
+          
+          // For CORS issues, add crossOrigin attribute
+          audioRef.current.crossOrigin = 'anonymous';
+          
+          try {
+            await audioRef.current.play();
+            setIsPlaying(true);
+            storage.saveToHistory(track);
+          } catch (playError) {
+            console.error('Error playing stream:', playError);
+            // If stream fails, try with direct YouTube URL as fallback
+            const youtubeUrl = `https://www.youtube.com/embed/${track.videoId}?autoplay=1`;
+            alert(`No se pudo reproducir el audio directamente. Abriendo en YouTube...`);
+            window.open(youtubeUrl, '_blank');
+            setIsPlaying(false);
+          }
+        } else if (streamData.embedUrl) {
+          console.log('🎵 Opening YouTube embed');
+          // Open in new tab for embed URLs
+          window.open(streamData.embedUrl + '?autoplay=1', '_blank');
+          alert('Reproduciendo en una nueva pestaña de YouTube');
+          setIsPlaying(false);
+        } else {
+          throw new Error('No valid stream or embed URL');
+        }
       }
     } catch (error) {
       console.error('Playback error:', error);
